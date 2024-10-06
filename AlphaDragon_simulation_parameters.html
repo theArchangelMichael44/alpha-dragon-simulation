@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alpha Double Dragon - Improved Simulation</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/110/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.110.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dat.gui@0.7.6/build/dat.gui.min.js"></script>
+</head>
+<body>
+  <script>
+    // Create the scene, camera, and renderer
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    var renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Add starry background using InstancedMesh for optimization
+    var starTexture = new THREE.TextureLoader().load('https://threejsfundamentals.org/threejs/resources/images/star.png');
+    var starGeometry = new THREE.PlaneGeometry(0.5, 0.5);
+    var starMaterial = new THREE.MeshBasicMaterial({ map: starTexture });
+    var starMesh = new THREE.InstancedMesh(starGeometry, starMaterial, 500);
+    
+    for (let i = 0; i < 500; i++) {
+      let position = new THREE.Vector3(
+        Math.random() * 200 - 100, 
+        Math.random() * 200 - 100, 
+        Math.random() * 200 - 100
+      );
+      let matrix = new THREE.Matrix4().setPosition(position);
+      starMesh.setMatrixAt(i, matrix);
+    }
+    scene.add(starMesh);
+
+    // Lighting for better depth and shadow
+    var ambientLight = new THREE.AmbientLight(0x404040, 2); // Soft ambient light
+    scene.add(ambientLight);
+
+    var pointLight = new THREE.PointLight(0xffffff, 1, 100); // Bright point light
+    pointLight.position.set(10, 10, 10);
+    scene.add(pointLight);
+
+    // Create a hemisphere geometry
+    function createHemisphere(color, positionY) {
+      var geometry = new THREE.SphereGeometry(7, 32 , 32, 0, Math.PI * 2, 0, Math.PI / 2);  // Hemisphere
+      var material = new THREE.MeshBasicMaterial({ color: color, wireframe: true, opacity: 0.6, transparent: true });
+      var hemisphere = new THREE.Mesh(geometry, material);
+      hemisphere.position.y = positionY;
+      return hemisphere;
+    }
+
+    // Create the base disk for each hemisphere
+    function createDisk(color, positionY) {
+      var geometry = new THREE.CircleGeometry(7, 40);  // Disk geometry matching the hemisphere radius
+      var material = new THREE.MeshBasicMaterial({ color: color, wireframe: true, opacity: 0.6, transparent: true });
+      var disk = new THREE.Mesh(geometry, material);
+      disk.rotation.x = Math.PI / 2;  // Rotate to align with the hemisphere base
+      disk.position.y = positionY;
+      return disk;
+    }
+
+    // Create the top and bottom hemispheres
+    var topHemisphere = createHemisphere(0x00ff00, 1);  // Green top hemisphere
+    var bottomHemisphere = createHemisphere(0x0000ff, -1);  // Blue bottom hemisphere
+    bottomHemisphere.rotation.x = Math.PI;  // Flip the bottom hemisphere
+    scene.add(topHemisphere);
+    scene.add(bottomHemisphere);
+
+    // Add disks to close the hemispheres
+    var topDisk = createDisk(0x00ff00, 1);  // Green disk at the equator (top hemisphere)
+    var bottomDisk = createDisk(0x0000ff, -1);  // Blue disk at the equator (bottom hemisphere)
+    scene.add(topDisk);
+    scene.add(bottomDisk);
+
+    // Create the central vortex for both top and bottom (cone shapes)
+    function createVortex(color, positionY, direction) {
+      var vortexGeometry = new THREE.CylinderGeometry(0.5, 0, 11.25, 32);  // Narrow at the base, wide at the top (tapering effect)
+      var vortexMaterial = new THREE.MeshBasicMaterial({ color: color, wireframe: true });
+      var vortex = new THREE.Mesh(vortexGeometry, vortexMaterial);
+      vortex.position.y = positionY;  // Centered based on hemisphere position
+      vortex.rotation.x = direction;  // Set the direction of the vortex
+      return vortex;
+    }
+
+    // Top vortex (pointing up) and bottom vortex (pointing down)
+    var topVortex = createVortex(0xffff00, 3, 0);  // Top vortex
+    var bottomVortex = createVortex(0xffff00, -3, Math.PI);  // Bottom vortex
+    scene.add(topVortex);
+    scene.add(bottomVortex);
+
+    // Create a central sphere (core mass)
+    var centralGeometry = new THREE.SphereGeometry(1, 12, 12);
+    var centralMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000, emissive: 0x101010 });
+    var centralSphere = new THREE.Mesh(centralGeometry, centralMaterial);
+    centralSphere.position.set(0, 0, 0);  // Centered between the hemispheres
+    scene.add(centralSphere);
+
+    // Create an enclosing sphere for the entire structure
+    var enclosingSphereGeometry = new THREE.SphereGeometry(9, 66, 66);
+    var enclosingSphereMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, opacity: 0.1, transparent: true });
+    var enclosingSphere = new THREE.Mesh(enclosingSphereGeometry, enclosingSphereMaterial);
+    scene.add(enclosingSphere);  // Add the enclosing sphere to the scene
+
+    // Add the flat space (plane) cutting through the equator
+    var planeGeometry = new THREE.PlaneGeometry(20, 20);  // Plane size
+    var planeMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, wireframe: true });
+    var plane = new THREE.Mesh(planeGeometry, planeMaterial);
+    plane.rotation.x = Math.PI / 2;  // Rotate to make it horizontal
+    scene.add(plane);
+
+    // Set the camera position
+    camera.position.z = 15;
+
+    // Add OrbitControls for interactivity
+    var controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+    // Variables for mass and energy calculation
+    var mass = 1;  // Start with 1 unit mass for example
+    var speedOfLight = 299792458;  // Speed of light in m/s
+
+    // Function to calculate Energy (E = mc²)
+    function calculateEnergy(mass) {
+        return mass * Math.pow(speedOfLight, 2);
+    }
+
+    // Function to update the energy display
+    function updateEnergy() {
+        var energy = calculateEnergy(mass);  // Energy calculated in real-time
+        document.getElementById('energyOutput').innerText = 'Energy: ' + energy.toExponential(2) + ' J';
+    }
+
+    // Create a div to display the energy output
+    var energyOutputDiv = document.createElement('div');
+    energyOutputDiv.id = 'energyOutput';
+    energyOutputDiv.style.position = 'absolute';
+    energyOutputDiv.style.top = '10px';
+    energyOutputDiv.style.left = '10px';
+    energyOutputDiv.style.color = 'white';
+    document.body.appendChild(energyOutputDiv);
+
+    // Adjust the vortex flow based on Quantum Interaction
+    function adjustVortexFlow(vortex, scaleFactor) {
+      vortex.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    }
+
+    // Function to adjust the gravitational interaction based on mass
+    function adjustGravityInteraction(mass) {
+      var gravitationalEffect = mass * 0.01;  // Example scaling factor for gravity
+      controlsData.rotationSpeed += gravitationalEffect;  // Increase rotation speed based on mass
+      adjustVortexFlow(topVortex, gravitationalEffect);  // Adjust vortex flow based on gravity
+      adjustVortexFlow(bottomVortex, gravitationalEffect);
+    }
+
+    // Create dat.GUI controls for interactivity
+    var gui = new dat.GUI();
+    var controlsData = {
+      HEnG: 1,
+      rotationSpeed: 0.01,
+      vortexScale: 1.0,
+      mass: 1.0,
+      coreSize: 1.0
+    };
+
+    // Add GUI controls for HEnG, rotation speed, vortex scale, and mass
+    gui.add(controlsData, 'HEnG', 0, 10).onChange(function(value) {
+      topHemisphere.scale.set(value, value, value);
+      bottomHemisphere.scale.set(value, value, value);
+      centralSphere.scale.set(value, value, value);
+    });
+
+    gui.add(controlsData, 'rotationSpeed', 0, 0.1);
+    gui.add(controlsData, 'vortexScale', 0.5, 2).onChange(function(value) {
+      adjustVortexFlow(topVortex, value);
+      adjustVortexFlow(bottomVortex, value);
+    });
+
+    // Add GUI for mass and link it to energy and gravity interactions
+    gui.add(controlsData, 'mass', 0.1, 10).onChange(function(value) {
+      mass = value;
+      updateEnergy();  // Update energy display
+      adjustGravityInteraction(mass);  // Adjust gravity interaction
+    });
+
+    gui.add(controlsData, 'coreSize', 0.5, 5).onChange(function(value) {
+      centralSphere.scale.set(value, value, value);
+    });
+
+    // Create a render loop for animation
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Rotate the hemispheres
+      topHemisphere.rotation.y += controlsData.rotationSpeed;
+      bottomHemisphere.rotation.y -= controlsData.rotationSpeed;
+
+      // Animate the vortex flow
+      adjustVortexFlow(topVortex, 1 + Math.sin(Date.now() * 0.001) * 0.05);
+      adjustVortexFlow(bottomVortex, 1 + Math.sin(Date.now() * 0.001) * 0.05);
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    updateEnergy();  // Initial energy calculation
+    animate();  // Start the animation loop
+  </script>
+</body>
+</html>
