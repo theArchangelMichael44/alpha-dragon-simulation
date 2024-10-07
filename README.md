@@ -1,4 +1,4 @@
-# Alpha Double Dragon Simulation
+# Alpha Dragon Simulation
 
 This repository contains the HTML code for the Alpha Double Dragon simulation, a visual representation of the equation that unifies mass, light, and gravity.
 
